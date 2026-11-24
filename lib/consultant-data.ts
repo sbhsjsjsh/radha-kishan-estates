@@ -76,6 +76,26 @@ export function getWhatsAppHref(customMessage?: string): string {
   return `https://wa.me/${CONSULTANT.whatsappDigits}?text=${encodeURIComponent(defaultMsg)}`;
 }
 
+export function getProfileShareUrl(runtimeOrigin?: string): string {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, '');
+  if (configured && /^https?:\/\//i.test(configured)) {
+    return `${configured}/profile`;
+  }
+  if (runtimeOrigin) {
+    return `${runtimeOrigin.replace(/\/+$/, '')}/profile`;
+  }
+  return '/profile';
+}
+
+export function formatDisplayUrl(fullUrl: string): string {
+  return fullUrl.replace(/^https?:\/\//i, '');
+}
+
+export function getProfileWhatsAppForwardHref(profileUrl: string): string {
+  const shareText = `${CONSULTANT.fullName} — Property Consultant, Hyderabad\nLuxury Villas · Skyscrapers · Apartments · Open Plots · Commercial & Global Real Estate\nDirect: ${CONSULTANT.phoneDisplay}\nView Profile: ${profileUrl}`;
+  return `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+}
+
 export function buildVCardString(websiteUrl?: string): string {
   const lines = [
     'BEGIN:VCARD',

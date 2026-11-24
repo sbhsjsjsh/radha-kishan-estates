@@ -11,12 +11,16 @@ import {
   Share2,
   MapPin,
   Printer,
+  Send,
 } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
 import {
   ADVISORY_SERVICES,
   CONSULTANT,
   buildVCardString,
+  formatDisplayUrl,
+  getProfileShareUrl,
+  getProfileWhatsAppForwardHref,
   getWhatsAppHref,
 } from '@/lib/consultant-data';
 
@@ -31,10 +35,10 @@ export default function DigitalCardStudio() {
     () => true,
     () => false
   );
-  const cardUrl = isClient ? window.location.href : '';
+  const profileUrl = getProfileShareUrl(isClient ? window.location.origin : undefined);
 
   const handleSaveVCard = () => {
-    const vcf = buildVCardString(cardUrl || undefined);
+    const vcf = buildVCardString(profileUrl.startsWith('http') ? profileUrl : undefined);
     const blob = new Blob([vcf], { type: 'text/vcard;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -49,7 +53,7 @@ export default function DigitalCardStudio() {
   };
 
   const handleCopy = async (kind: 'phone' | 'url') => {
-    const value = kind === 'phone' ? CONSULTANT.phoneDisplay : cardUrl;
+    const value = kind === 'phone' ? CONSULTANT.phoneDisplay : profileUrl;
     if (!value) return;
     try {
       await navigator.clipboard.writeText(value);
@@ -60,21 +64,23 @@ export default function DigitalCardStudio() {
     }
   };
 
-  const handleNativeShare = async () => {
-    if (!cardUrl) return;
+  const handleOneClickShare = async () => {
+    if (!profileUrl) return;
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({
           title: `${CONSULTANT.fullName} — Property Consultant, Hyderabad`,
           text: `Connect with ${CONSULTANT.fullName} (${CONSULTANT.phoneDisplay}) for Luxury Villas, Skyscrapers, Apartments, Open Plots, Commercial Spaces & Global Real Estate.`,
-          url: cardUrl,
+          url: profileUrl,
         });
         return;
-      } catch {
-        // Fallback to copy
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          return;
+        }
       }
     }
-    handleCopy('url');
+    await handleCopy('url');
   };
 
   return (
@@ -177,7 +183,7 @@ export default function DigitalCardStudio() {
         </div>
       </section>
 
-      {/* QR Code & Tailored WhatsApp Launcher */}
+      {/* QR Code, 1-Click Share & Tailored WhatsApp Launcher */}
       <section
         aria-label="Share profile and instant WhatsApp inquiry"
         className="flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-7 sm:p-8 lg:col-span-5"
@@ -185,7 +191,7 @@ export default function DigitalCardStudio() {
         <div>
           <div className="flex items-center justify-between gap-4">
             <h2 className="font-display text-2xl font-semibold tracking-tight text-zinc-950">
-              Scan or Share Profile
+              One-Click Share & QR
             </h2>
             <button
               type="button"
@@ -197,34 +203,70 @@ export default function DigitalCardStudio() {
             </button>
           </div>
 
-          <div className="mt-5 flex flex-col items-center rounded-lg border border-zinc-200 bg-[#FAFAFA] p-5 sm:flex-row sm:gap-6">
-            <div className="shrink-0 rounded-md bg-white p-2.5">
-              <QRCodeSVG
-                value={cardUrl || `tel:${CONSULTANT.phoneRaw}`}
-                size={132}
-                bgColor="#FFFFFF"
-                fgColor="#18181B"
-                level="M"
-              />
-            </div>
-            <div className="mt-4 text-center sm:mt-0 sm:text-left">
-              <p className="text-sm font-semibold text-zinc-900">
-                In-Person QR Exchange
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-zinc-600">
-                Point any phone camera at this code to open Radha Kishan’s portfolio and save his
-                number immediately.
-              </p>
-              <div className="mt-3 flex flex-wrap justify-center gap-2 sm:justify-start">
-                <button
-                  type="button"
-                  onClick={handleNativeShare}
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 hover:bg-zinc-50"
-                >
-                  <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>{copiedState === 'url' ? 'Link Copied' : 'Share Link'}</span>
-                </button>
+          <div className="mt-5 rounded-lg border border-zinc-200 bg-[#FAFAFA] p-5">
+            <div className="flex flex-col items-center sm:flex-row sm:gap-5">
+              <div className="shrink-0 rounded-md bg-white p-2.5">
+                <QRCodeSVG
+                  value={profileUrl.startsWith('http') ? profileUrl : `tel:${CONSULTANT.phoneRaw}`}
+                  size={124}
+                  bgColor="#FFFFFF"
+                  fgColor="#18181B"
+                  level="M"
+                />
               </div>
+              <div className="mt-4 min-w-0 flex-1 text-center sm:mt-0 sm:text-left">
+                <p className="text-sm font-semibold text-zinc-900">
+                  Direct Profile Link
+                </p>
+                <p
+                  title={profileUrl}
+                  className="mt-1 truncate font-mono text-xs font-medium text-[#0F4C3A]"
+                >
+                  {formatDisplayUrl(profileUrl)}
+                </p>
+                <p className="mt-1.5 text-xs leading-relaxed text-zinc-600">
+                  Anyone tapping this link or scanning the QR opens this profile page directly.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2 border-t border-zinc-200/80 pt-4">
+              <button
+                type="button"
+                onClick={handleOneClickShare}
+                className="inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-md bg-[#0F4C3A] px-3.5 py-2 text-xs font-medium text-white whitespace-nowrap transition-colors hover:bg-[#0B3B2D]"
+              >
+                <Share2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>{copiedState === 'url' ? 'Link Copied' : 'Share Profile'}</span>
+              </button>
+
+              <a
+                href={getProfileWhatsAppForwardHref(profileUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-md border border-zinc-300 bg-white px-3.5 py-2 text-xs font-medium text-zinc-900 whitespace-nowrap transition-colors hover:border-zinc-900 hover:bg-zinc-50"
+              >
+                <Send className="h-3.5 w-3.5 shrink-0 text-[#0F4C3A]" aria-hidden="true" />
+                <span>WhatsApp Share</span>
+              </a>
+
+              <button
+                type="button"
+                onClick={() => handleCopy('url')}
+                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-zinc-300 bg-white px-3 py-2 text-xs font-medium text-zinc-800 whitespace-nowrap transition-colors hover:bg-zinc-50"
+              >
+                {copiedState === 'url' ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 text-[#0F4C3A]" aria-hidden="true" />
+                    <span>Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>Copy</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
 
@@ -258,11 +300,11 @@ export default function DigitalCardStudio() {
         <div className="mt-7 border-t border-zinc-200 pt-5">
           <a
             href={getWhatsAppHref(
-              `Hello Radha Kishan, I visited your profile page and would like to discuss ${selectedTopic} opportunities.`
+              `Hello Radha Kishan, I visited your profile page (${profileUrl}) and would like to discuss ${selectedTopic} opportunities.`
             )}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-[#0F4C3A] px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#0B3B2D]"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-zinc-950 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
           >
             <MessageCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
             <span>Message About {selectedTopic}</span>

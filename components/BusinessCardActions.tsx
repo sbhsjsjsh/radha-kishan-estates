@@ -11,11 +11,15 @@ import {
   Check,
   X,
   Share2,
+  Send,
 } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
 import {
   CONSULTANT,
   buildVCardString,
+  formatDisplayUrl,
+  getProfileShareUrl,
+  getProfileWhatsAppForwardHref,
   getWhatsAppHref,
 } from '@/lib/consultant-data';
 
@@ -36,7 +40,7 @@ export default function BusinessCardActions({
     () => true,
     () => false
   );
-  const cardUrl = isClient ? `${window.location.origin}/profile` : '';
+  const profileUrl = getProfileShareUrl(isClient ? window.location.origin : undefined);
 
   useEffect(() => {
     if (!qrOpen) return;
@@ -48,7 +52,7 @@ export default function BusinessCardActions({
   }, [qrOpen]);
 
   const handleDownloadVCard = () => {
-    const vcf = buildVCardString(cardUrl || undefined);
+    const vcf = buildVCardString(profileUrl.startsWith('http') ? profileUrl : undefined);
     const blob = new Blob([vcf], { type: 'text/vcard;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -68,39 +72,44 @@ export default function BusinessCardActions({
       setCopiedType('phone');
       setTimeout(() => setCopiedType(null), 2200);
     } catch {
-      // Fallback if clipboard API is unavailable
+      // Ignore clipboard denial
     }
   };
 
-  const handleShareOrCopyLink = async () => {
-    const shareTarget = cardUrl || (typeof window !== 'undefined' ? window.location.href : '');
-    if (typeof navigator !== 'undefined' && navigator.share && shareTarget) {
+  const handleCopyProfileLink = async () => {
+    if (!profileUrl) return;
+    try {
+      await navigator.clipboard.writeText(profileUrl);
+      setCopiedType('link');
+      setTimeout(() => setCopiedType(null), 2200);
+    } catch {
+      // Ignore clipboard denial
+    }
+  };
+
+  const handleOneClickShare = async () => {
+    if (!profileUrl) return;
+    if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({
           title: `${CONSULTANT.fullName} — Hyderabad Real Estate Advisor`,
-          text: `Profile of ${CONSULTANT.fullName} (${CONSULTANT.phoneDisplay}) — Luxury Villas, Skyscrapers, Open Plots, Commercial & Global Real Estate.`,
-          url: shareTarget,
+          text: `${CONSULTANT.fullName} (${CONSULTANT.phoneDisplay}) — Luxury Villas, Skyscrapers, Apartments, Open Plots, Commercial & Global Real Estate.`,
+          url: profileUrl,
         });
         return;
-      } catch {
-        // User cancelled or share unsupported, fall through to copy
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          return;
+        }
       }
     }
-    if (shareTarget) {
-      try {
-        await navigator.clipboard.writeText(shareTarget);
-        setCopiedType('link');
-        setTimeout(() => setCopiedType(null), 2200);
-      } catch {
-        // Ignore clipboard denial
-      }
-    }
+    await handleCopyProfileLink();
   };
 
   return (
     <>
       <div className="flex flex-col gap-3">
-        {/* Primary Row: Single dominant CTA + Save Contact */}
+        {/* Primary Row: Dominant CTA + Save Contact + 1-Click Share */}
         <div className="flex flex-wrap items-center gap-3">
           <a
             href={getWhatsAppHref()}
@@ -129,9 +138,27 @@ export default function BusinessCardActions({
               </>
             )}
           </button>
+
+          <button
+            type="button"
+            onClick={handleOneClickShare}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-900 whitespace-nowrap shrink-0 transition-colors duration-150 hover:border-zinc-900 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F4C3A] focus-visible:ring-offset-2"
+          >
+            {copiedType === 'link' ? (
+              <>
+                <Check className="h-4 w-4 shrink-0 text-[#0F4C3A]" aria-hidden="true" />
+                <span className="text-[#0F4C3A]">Profile Link Copied</span>
+              </>
+            ) : (
+              <>
+                <Share2 className="h-4 w-4 shrink-0 text-zinc-700" aria-hidden="true" />
+                <span>Share Profile</span>
+              </>
+            )}
+          </button>
         </div>
 
-        {/* Utility Row: Direct Call, Copy Number, QR Code, Share */}
+        {/* Utility Row: Direct Call, Copy Number, 1-Click WhatsApp Forward, Profile QR */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-1 text-sm text-zinc-700">
           <a
             href={`tel:${CONSULTANT.phoneRaw}`}
@@ -163,6 +190,20 @@ export default function BusinessCardActions({
             )}
           </button>
 
+          <span className="hidden text-zinc-300 sm:inline" aria-hidden="true">
+            ·
+          </span>
+
+          <a
+            href={getProfileWhatsAppForwardHref(profileUrl)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-10 items-center gap-1.5 text-sm text-zinc-600 whitespace-nowrap shrink-0 transition-colors hover:text-[#0F4C3A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F4C3A]"
+          >
+            <Send className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>Forward on WhatsApp</span>
+          </a>
+
           {variant === 'hero' && (
             <>
               <span className="hidden text-zinc-300 sm:inline" aria-hidden="true">
@@ -178,28 +219,6 @@ export default function BusinessCardActions({
               </button>
             </>
           )}
-
-          <span className="hidden text-zinc-300 sm:inline" aria-hidden="true">
-            ·
-          </span>
-
-          <button
-            type="button"
-            onClick={handleShareOrCopyLink}
-            className="inline-flex min-h-10 items-center gap-1.5 text-sm text-zinc-600 whitespace-nowrap shrink-0 transition-colors hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F4C3A]"
-          >
-            {copiedType === 'link' ? (
-              <>
-                <Check className="h-4 w-4 shrink-0 text-[#0F4C3A]" aria-hidden="true" />
-                <span className="text-[#0F4C3A]">Profile Link Copied</span>
-              </>
-            ) : (
-              <>
-                <Share2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                <span>Share Profile</span>
-              </>
-            )}
-          </button>
         </div>
       </div>
 
@@ -242,7 +261,7 @@ export default function BusinessCardActions({
             <div className="mt-6 flex flex-col items-center rounded-lg border border-zinc-200 bg-[#FAFAFA] p-6">
               <div className="rounded-md bg-white p-3">
                 <QRCodeSVG
-                  value={cardUrl || `tel:${CONSULTANT.phoneRaw}`}
+                  value={profileUrl.startsWith('http') ? profileUrl : `tel:${CONSULTANT.phoneRaw}`}
                   size={184}
                   bgColor="#FFFFFF"
                   fgColor="#18181B"
@@ -250,39 +269,50 @@ export default function BusinessCardActions({
                 />
               </div>
               <p className="mt-4 text-center text-xs leading-relaxed text-zinc-600">
-                Scan with any smartphone camera to open Radha Kishan’s profile or save contact details.
+                Scan to open the profile directly or share the direct domain link below.
               </p>
-              <p className="mt-1 font-mono text-xs font-medium text-zinc-900 tabular-nums">
-                {CONSULTANT.phoneDisplay}
+              <p className="mt-2 max-w-full truncate font-mono text-[11px] font-medium text-[#0F4C3A]">
+                {formatDisplayUrl(profileUrl)}
               </p>
             </div>
 
-            <div className="mt-5 flex flex-col gap-2.5 sm:flex-row">
-              <button
-                type="button"
-                onClick={handleDownloadVCard}
-                className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md bg-[#0F4C3A] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#0B3B2D]"
+            <div className="mt-5 flex flex-col gap-2.5">
+              <a
+                href={getProfileWhatsAppForwardHref(profileUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-[#0F4C3A] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#0B3B2D]"
               >
-                <Download className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span>Download vCard</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleShareOrCopyLink}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-50"
-              >
-                {copiedType === 'link' ? (
-                  <>
-                    <Check className="h-4 w-4 text-[#0F4C3A]" aria-hidden="true" />
-                    <span>Copied</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-4 w-4" aria-hidden="true" />
-                    <span>Copy Link</span>
-                  </>
-                )}
-              </button>
+                <Send className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>Forward Profile on WhatsApp</span>
+              </a>
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleCopyProfileLink}
+                  className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-zinc-300 bg-white px-3 py-2 text-xs font-medium text-zinc-900 transition-colors hover:bg-zinc-50"
+                >
+                  {copiedType === 'link' ? (
+                    <>
+                      <Check className="h-3.5 w-3.5 text-[#0F4C3A]" aria-hidden="true" />
+                      <span>Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>Copy Link</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadVCard}
+                  className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-zinc-300 bg-white px-3 py-2 text-xs font-medium text-zinc-900 transition-colors hover:bg-zinc-50"
+                >
+                  <Download className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>Save vCard</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
